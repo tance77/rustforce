@@ -3,9 +3,10 @@ extern crate reqwest;
 use crate::errors::Error;
 use crate::response::{
     AccessToken, CreateResponse, DescribeGlobalResponse, DescribeResponse, ErrorResponse,
-    QueryResponse, SearchResponse, TokenResponse, VersionResponse,
+    QueryResponse, SearchResponse, TokenResponse, VersionResponse, AnonymousApexResponse, OAuthUserInfo, IdResult, ApexLog,
 };
 use crate::utils::substring_before;
+use chrono::{Utc, Duration};
 use regex::Regex;
 use reqwest::header::{HeaderMap, AUTHORIZATION};
 use reqwest::{Response, StatusCode, Url};
@@ -23,6 +24,7 @@ pub struct Client {
     instance_url: Option<String>,
     pub access_token: Option<AccessToken>,
     version: String,
+    user: Option<OAuthUserInfo>
 }
 
 impl Client {
@@ -38,6 +40,7 @@ impl Client {
             access_token: None,
             instance_url: None,
             version: "v44.0".to_string(),
+            user: None
         }
     }
 
@@ -224,6 +227,93 @@ impl Client {
                 fields: None,
             }))
         }
+    }
+
+    /// Execute anonymous apex
+    pub async fn execute_anonymous_apex<T: DeserializeOwned>(&mut self, code: &str) -> Result<AnonymousApexResponse, Error> {
+        let debug_trace_id = self.enable_developer_tracing().await?;
+        let tooling_url = format!("{}/tooling/executeAnonymous/", self.base_path());
+        let params = vec![("anonymousBody", code)];
+        let res = self.post(tooling_url, params).await?;
+        if res.status().is_success() {
+            // remove the trace flag
+            self.disable_developer_trace(debug_trace_id.id.as_str()).await?;
+            let logs = self.list_logs().await?;
+            let log = logs.first().unwrap();
+            let log_id = log.id.as_str();
+            let log_body = self.download_log(log_id).await?;
+            
+            Ok(AnonymousApexResponse {
+                success: true,
+                compiled: true,
+                body: log_body,
+            })
+        } else {
+            Err(Error::ErrorResponses(res.json().await?))
+        }
+    }
+
+    /// list all logs for the current logged in user
+    pub async fn list_logs(&mut self) -> Result<Vec<ApexLog>, Error> {
+        let query = format!("SELECT Id, LogUserId, StartTime FROM ApexLog WHERE LogUserId={} ORDER BY StartTime DESC LIMIT 1", self.user.as_ref().unwrap().user_id);
+        match self.query(query.as_str()).await {
+            Ok(res) => Ok(res.records),
+            Err(e) => Err(e),
+        }
+    }
+
+    pub async fn download_log(&mut self, id: &str) -> Result<String, Error> {
+        let tooling_url = format!("{}/tooling/sobjects/ApexLog/{}/Body", self.base_path(), id);
+        let res = self.get(tooling_url, vec![]).await?;
+        if res.status().is_success() {
+            Ok(res.text().await?)
+        } else {
+            Err(Error::ErrorResponses(res.json().await?))
+        }
+    }
+
+    /// disables the developer trace log that was previously set
+    pub async fn disable_developer_trace(&mut self, id: &str) -> Result<(), Error> {
+        let tooling_url = format!("{}/tooling/sobjects/TraceFlag/{}", self.base_path(), id);
+        let res = self.delete(tooling_url).await;
+        
+        Ok(())
+    }
+
+    /// enables a developer trace log for 1 minute
+    pub async fn enable_developer_tracing(&mut self) -> Result<IdResult, Error> {
+        if(self.user.is_none()) {
+            self.me().await?;
+        }
+        
+        let expiration_as_time = Utc::now() + Duration::minutes(1);
+        let expiration = expiration_as_time.to_rfc3339();
+    
+        let tooling_url = format!("{}/tooling/sobjects/TraceFlag/", self.base_path());
+        let params = vec![
+            ("TracedEntityId", self.user.as_ref().unwrap().user_id.as_str()),
+            ("LogType", "DEVELOPER_LOG"),
+            ("ExpirationDate", expiration.as_str()),
+        ];
+        let res = self.post(tooling_url, params).await?;
+        if res.status().is_success() {
+            Ok(res.json().await?)
+        } else {
+            Err(Error::ErrorResponses(res.json().await?))
+        }
+    }
+
+    /// Get the current user info
+    pub async fn me(&mut self) -> Result<(), Error> {
+        let query_url = format!("{}/services/oauth2/userinfo", self.instance_url.as_ref().unwrap());
+        let res = self.get(query_url, vec![]).await?;
+    
+        if res.status().is_success() {
+            let user_response: OAuthUserInfo = res.json().await?;
+            self.user = Some(user_response);
+        }
+
+        Ok(())
     }
 
     /// Query record using SOQL

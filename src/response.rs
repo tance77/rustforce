@@ -12,6 +12,14 @@ pub struct QueryResponse<T> {
 }
 
 #[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AnonymousApexResponse {
+    pub compiled: bool,
+    pub success: bool,
+    pub body: String
+}
+
+#[derive(Deserialize, Debug)]
 pub struct CreateResponse {
     pub id: String,
     pub success: bool,
@@ -253,4 +261,91 @@ pub struct VersionResponse {
     pub label: String,
     pub url: String,
     pub version: String,
+}
+
+#[derive(Deserialize, Clone)]
+pub struct OAuthUserInfo {
+    pub sub: String,
+    pub user_id: String,
+    pub organization_id: String,
+    pub preferred_username: String,
+    pub nickname: String,
+    pub name: String,
+    pub email: String,
+    pub email_verified: bool,
+    pub given_name: String,
+    pub family_name: String,
+    pub zoneinfo: String,
+    pub photos: Photos,
+    pub profile: String,
+    pub picture: String,
+    pub phone_number: String,
+    pub phone_number_verified: bool,
+    pub address: Address,
+    pub urls: InstanceUrls,
+    pub active: bool,
+    pub user_type: String,
+    pub language: String,
+    pub locale: String,
+    #[serde(rename = "utcOffset")]
+    pub utc_offset: i64,
+    pub updated_at: String,
+    pub is_app_installed: bool,
+}
+
+#[derive(Deserialize, Clone)]
+pub struct Address {
+    pub street_address: String,
+    pub locality: String,
+    pub region: String,
+    pub country: String,
+    pub postal_code: String,
+}
+
+#[derive(Deserialize, Clone)]
+pub struct Photos {
+    pub picture: String,
+    pub thumbnail: String,
+}
+
+#[derive(Deserialize, Clone)]
+pub struct InstanceUrls {
+    pub enterprise: String,
+    pub metadata: String,
+    pub partner: String,
+    pub rest: String,
+    pub sobjects: String,
+    pub search: String,
+    pub query: String,
+    pub recent: String,
+    pub tooling_soap: String,
+    pub tooling_rest: String,
+    pub profile: String,
+    pub feeds: String,
+    pub groups: String,
+    pub users: String,
+    pub feed_items: String,
+    pub feed_elements: String,
+    pub custom_domain: String,
+}
+
+#[derive(Deserialize, Clone)]
+pub struct IdResult {
+    pub id: String,
+}
+
+#[derive(Deserialize, Clone)]
+pub struct ApexLog {
+    pub Application: String,
+    pub DurationMiliseconds: i32,
+    pub Location: String,
+    pub LogLength: i32,
+    pub Operation: String,
+    pub Request: String,
+    pub StartTime: String,
+    pub Status: String,
+    pub SystemModstamp: String,
+    pub id: String,
+    pub LogUserId: String,
+    pub RequestType: String,
 }
