@@ -1,11 +1,12 @@
 extern crate reqwest;
 
 use crate::errors::Error;
-use crate::response::{AccessToken, AllJobsStatus, JobDetails, BulkApiCreateResponse, BulkApiStateChangeResponse, BulkApiStatusResponse, CreateResponse, DescribeGlobalResponse, DescribeResponse, ErrorResponse, JobInfo, QueryResponse, SearchResponse, TokenResponse, VersionResponse};
+use crate::response::{AccessToken, AllJobsStatus, JobDetails, BulkApiCreateResponse, BulkApiStateChangeResponse, BulkApiStatusResponse, CreateResponse, DescribeGlobalResponse, DescribeResponse, ErrorResponse, JobInfo, QueryResponse, SearchResponse, TokenResponse, VersionResponse, DeployResult, ApexClass, TestRunRequest, TestRunResponse};
 use crate::utils::substring_before;
 use regex::Regex;
 use reqwest::header::{HeaderMap, AUTHORIZATION};
 use reqwest::{Response, StatusCode, Url};
+use reqwest::multipart;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -49,6 +50,10 @@ impl Client {
     pub fn set_version(&mut self, version: &str) -> &mut Self {
         self.version = version.to_string();
         self
+    }
+
+    pub fn get_version(&self) -> String {
+        return self.version.to_string();
     }
 
     pub fn set_instance_url(&mut self, instance_url: &str) -> &mut Self {
@@ -589,6 +594,103 @@ impl Client {
             .await?;
         Ok(res)
     }
+
+    async fn deploy_metadata(&self, zip_buffer: Vec<u8>) -> Result<DeployResult, Error> {
+        let part = multipart::Part::bytes(zip_buffer)
+            .file_name("metadata.zip")
+            .mime_str("application/zip")?;
+
+        let form = multipart::Form::new().part("file", part);
+
+        let url: String = format!("{}/metadata/deployRequest",self.base_path());
+
+        let res = self.http_client
+            .post(url.as_str())
+            .headers(self.create_header().unwrap())
+            .multipart(form)
+            .send()
+            .await?;
+
+        Ok(res.json().await?)
+    }
+
+    async fn check_deployment_status(&self, deployment_id: String, include_details: bool) -> Result<DeployResult, Error> {
+        let mut url = format!("{}/metadata/deployRequest/{}", self.base_path(), deployment_id);
+        if include_details {
+            url = format!("{}?includeDetails=true", url);
+        }
+        let deploy_result = self.get(url, vec![]).await;
+
+        match deploy_result {
+            Ok(deploy_result) => {
+                return Ok(deploy_result.json().await?);
+            },
+            Err(e) => {
+                return Err(e);
+            }
+        }
+    }
+
+    pub async fn list_apex_classes(&self) -> Result<Vec<ApexClass>, Error> {
+        let soql_query = "SELECT Id, Name FROM ApexClass";
+        let query_url = format!("{}/services/data/v{}/query?q={}", 
+                                self.instance_url.as_ref().unwrap(), 
+                                self.get_version(), 
+                                soql_query);
+    
+        let resp = self.get(query_url, vec![]).await;
+
+        match resp {
+            Ok(resp) => {
+                let query_response: QueryResponse<ApexClass> = resp.json().await?;
+                return Ok(query_response.records);
+            },
+            Err(e) => {
+                return Err(e);
+            }
+        }
+    }
+
+    pub async fn list_test_apex_classes(&self) -> Result<Vec<ApexClass>, Error> {
+        let soql_query = "SELECT Id, Name FROM ApexClass WHERE SymbolTable.HasTestMethods = true";
+        let query_url = format!("{}/services/data/v{}/tooling/query?q={}", 
+                                self.instance_url.as_ref().unwrap(), 
+                                self.get_version(), 
+                                soql_query);
+    
+        let resp = self.get(query_url, vec![]).await; // assuming 'get' is a method to make GET requests
+        
+        match resp {
+            Ok(resp) => {
+                let query_response: QueryResponse<ApexClass> = resp.json().await?;
+                return Ok(query_response.records);
+            },
+            Err(e) => {
+                return Err(e);
+            }
+        }
+    }
+
+    pub async fn run_test_classes(&self, class_ids: Vec<String>) -> Result<String, Error> {
+        let run_tests_url = format!("{}/services/data/v{}/tooling/runTestsAsynchronous/", 
+                                    self.instance_url.as_ref().unwrap(), 
+                                    self.get_version());
+
+        let request_body = TestRunRequest::new(class_ids);
+
+        let res = self.post(run_tests_url, request_body).await;
+
+        match res {
+            Ok(res) => {
+                let test_run_response: TestRunResponse = res.json().await?;
+                return Ok(test_run_response.id);
+            },
+            Err(e) => {
+                return Err(e);
+            }
+        }
+    }
+    
 
     async fn get_raw(&self, url: String) -> Result<Response, Error> {
         let mut headers = self.create_header()?;

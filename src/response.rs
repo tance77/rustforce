@@ -362,3 +362,76 @@ pub struct JobDetails {
     pub system_modstamp: String, // Use chrono::NaiveDateTime if you want to handle dates and times
     pub total_processing_time: Option<u64>, // Use Option if the field can be absent
 }
+
+#[derive(serde::Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct DeployOptions {
+    pub allow_missing_files: bool,
+    pub auto_update_package: bool,
+    pub check_only: bool,
+    pub ignore_warnings: bool,
+    pub purge_on_delete: bool,
+    pub rollback_on_error: bool,
+    pub run_tests: Option<Vec<String>>,
+    pub single_package: bool,
+    pub test_level: String,
+}
+
+#[derive(serde::Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct DeploymentRunTestResult {
+    // docs aren't as clear as i hoped here
+}
+
+#[derive(serde::Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct DeploymentResultDetails {
+    pub component_failures: Option<Vec<String>>,
+    pub component_successes: Option<Vec<String>>,
+    pub run_test_result: Option<DeploymentRunTestResult>,
+}
+
+#[derive(serde::Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct DeployResult {
+    pub id: String,
+    pub success: bool,
+    pub check_only: bool,
+    pub ignore_warnings: bool,
+    pub rollback_on_error: bool,
+    pub status: String,
+    pub run_tests_enabled: bool,
+    pub done: bool,
+    pub details: Option<DeploymentResultDetails>,
+    pub error_message: Option<String>,
+    pub error_status_code: Option<String>,
+    pub status_detail: Option<String>,
+    pub created_date: String,
+    pub completed_date: Option<String>,
+    pub start_date: String,
+    pub deploy_options: Option<DeployOptions>,
+}
+
+#[derive(serde::Deserialize, Debug)]
+pub struct ApexClass {
+    pub id: String,
+    pub name: String,
+}
+
+#[derive(serde::Serialize)]
+pub struct TestRunRequest {
+    pub classids: String,
+}
+
+#[derive(serde::Deserialize, Debug)]
+pub struct TestRunResponse {
+    pub id: String
+}
+
+impl TestRunRequest {
+    pub fn new(class_ids: Vec<String>) -> Self {
+        TestRunRequest {
+            classids: class_ids.join(","),
+        }
+    }
+}
