@@ -10,6 +10,7 @@
 //!
 //!
 //! ```rust,no_run
+//!
 //! use std::error::Error;
 //!
 //! #[tokio::main]
@@ -20,12 +21,4 @@
 //! let client = Client();
 //! Ok(())
 //! }
-
-//! }
 //! ```
-pub mod Xml;
-pub mod access_token;
-pub mod client;
-pub mod errors;
-pub mod responses;
-pub mod utils;
