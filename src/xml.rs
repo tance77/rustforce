@@ -27,7 +27,7 @@ impl Xml {
 
 #[cfg(test)]
 mod tests {
-    use crate::Xml::Xml;
+    use crate::xml::Xml;
     use html_escape::decode_html_entities;
 
     #[tokio::test]

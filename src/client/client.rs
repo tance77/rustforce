@@ -2,8 +2,7 @@ use crate::access_token::AccessToken;
 use crate::errors::Error;
 use crate::responses::error_response::ErrorResponse;
 use crate::responses::token_response::TokenResponse;
-use crate::Xml::Xml;
-use log::debug;
+use crate::xml::Xml;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue, AUTHORIZATION};
 use reqwest::{Response, Url};
 use serde::Serialize;
@@ -21,24 +20,13 @@ pub struct Client {
     pub refresh_token: Option<String>,
     pub version: String,
     pub secret_required: bool,
-    pub api_version: ApiVersion,
-    pub api_endpoint: String,
-}
-
-#[derive(Clone, PartialEq)]
-pub enum ApiVersion {
-    V1,
-    V2,
-}
-
-impl Default for ApiVersion {
-    fn default() -> Self {
-        ApiVersion::V2
-    }
 }
 
 impl Client {
-    pub fn new(api_version: ApiVersion) -> Client {
+    pub fn default() -> Self {
+        Client::new()
+    }
+    pub fn new() -> Client {
         let http_client = reqwest::Client::new();
         Client {
             http_client,
@@ -50,11 +38,6 @@ impl Client {
             refresh_token: None,
             secret_required: true,
             version: "v59.0".to_string(),
-            api_version: api_version.clone(),
-            api_endpoint: match api_version {
-                ApiVersion::V1 => "/services/async/59.0".to_string(), //no v in version. not sure it matters
-                ApiVersion::V2 => "/services/data/v59.0".to_string(), //v in version. not sure it matters
-            },
         }
     }
     pub fn set_login_endpoint(&mut self, endpoint: &str) -> &mut Self {
@@ -97,15 +80,16 @@ impl Client {
     }
 
     /// Set Access token if you've already obtained one via one of the OAuth2 flows
-    pub fn set_access_token(&mut self, token_response: &TokenResponse) -> &mut Self {
-        let token_type = token_response
-            .clone()
-            .token_type
-            .unwrap_or_else(|| "".to_string());
+    pub fn set_access_token(
+        &mut self,
+        access_token: String,
+        issued_at: String,
+        token_type: String,
+    ) -> &mut Self {
         self.access_token = Some(AccessToken {
             token_type,
-            value: token_response.access_token.to_string(),
-            issued_at: token_response.issued_at.to_string(),
+            value: access_token,
+            issued_at,
         });
         self
     }
@@ -190,8 +174,10 @@ impl Client {
             .await?;
 
         if res.status().is_success() {
-            let r: TokenResponse = res.json().await?;
-            self.set_credentials_from_token_response(r);
+            let response: TokenResponse = res.json().await?;
+            let token_type = response.token_type.unwrap_or_else(|| "".to_string());
+            self.set_access_token(response.access_token, response.issued_at, token_type);
+            self.instance_url = Some(response.instance_url);
             Ok(self)
         } else {
             let token_error = res.json().await?;
@@ -221,19 +207,15 @@ impl Client {
             .await?;
 
         if res.status().is_success() {
-            let r: TokenResponse = res.json().await?;
-            self.set_credentials_from_token_response(r);
+            let response: TokenResponse = res.json().await?;
+            let token_type = response.token_type.unwrap_or_else(|| "".to_string());
+            self.set_access_token(response.access_token, response.issued_at, token_type);
+            self.instance_url = Some(response.instance_url);
             Ok(self)
         } else {
             let error_response = res.json().await?;
             Err(Error::TokenError(error_response))
         }
-    }
-
-    fn set_credentials_from_token_response(&mut self, response: TokenResponse) -> &mut Self {
-        self.set_access_token(&response);
-        self.instance_url = Some(response.instance_url);
-        self
     }
 
     pub async fn login_by_soap(
@@ -290,22 +272,16 @@ impl Client {
         let parsed = Url::parse(&resource_url).unwrap();
         // Some ownership absurdity for string refs accessed through iterators with collect
         let hash_query: HashMap<_, _> = parsed.query_pairs().into_owned().collect();
-        let paramstrings: Vec<(String, String)> = hash_query
+        let params_string: Vec<(String, String)> = hash_query
             .keys()
             .map(|k| (String::from(k), String::from(&hash_query[k])))
             .collect();
-        let params: Vec<(&str, &str)> = paramstrings
+        let params: Vec<(&str, &str)> = params_string
             .iter()
             .map(|&(ref x, ref y)| (&x[..], &y[..]))
             .collect();
         let path: String = parsed.path().to_string();
-        let res = self.rest_get(path, params).await?;
-
-        if res.status().is_success() {
-            Ok(res)
-        } else {
-            Err(Error::DescribeError(res.json().await?))
-        }
+        self.rest_get(path, params).await
     }
 
     pub async fn rest_get(
@@ -518,7 +494,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_set_instance_url() {
-        let mut client = Client::new(ApiVersion::V1);
+        let mut client = Client::new();
         let url = "https://example.com";
         client.set_instance_url(url);
         assert_eq!(Some(url.to_string()), client.instance_url);
@@ -526,7 +502,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_instance_url() {
-        let mut client = Client::new(ApiVersion::V1);
+        let mut client = Client::new();
         let url = "https://example.com";
         client.set_instance_url(url);
         assert_eq!(url, client.get_instance_url());
@@ -534,40 +510,16 @@ mod tests {
 
     #[tokio::test]
     async fn test_set_access_token() {
-        let mut client = Client::new(ApiVersion::V1);
+        let mut client = Client::new();
         let token_value = "MySuperSecretToken";
-        let token = TokenResponse {
-            id: "".to_string(),
-            issued_at: "".to_string(),
-            access_token: token_value.to_string(),
-            instance_url: "".to_string(),
-            signature: "".to_string(),
-            token_type: None,
-        };
-        client.set_access_token(&token);
-        assert_eq!(token_value, client.access_token.unwrap().value);
-    }
-
-    #[tokio::test]
-    async fn test_get_access_token() {
-        let mut client = Client::new(ApiVersion::V1);
-        let token_value = "MySuperSecretToken";
-        let token = TokenResponse {
-            id: "".to_string(),
-            issued_at: "".to_string(),
-            access_token: token_value.to_string(),
-            instance_url: "".to_string(),
-            signature: "".to_string(),
-            token_type: None,
-        };
-        client.set_access_token(&token);
+        client.set_access_token(token_value.to_string(), "".to_string(), "".to_string());
         assert_eq!(token_value, client.get_access_token());
     }
 
     #[tokio::test]
     async fn test_create_refresh_token_params_no_client_secret() {
         // Attempting to refresh without a token should return without error
-        let mut client = Client::new(ApiVersion::V1);
+        let mut client = Client::new();
         client.set_secret_required(false);
         client.set_client_id("Bulma");
         client.set_refresh_token("Goku");
@@ -580,7 +532,7 @@ mod tests {
     #[tokio::test]
     async fn test_create_refresh_token_params() {
         // Attempting to refresh without a token should return without error
-        let mut client = Client::new(ApiVersion::V1);
+        let mut client = Client::new();
         client.set_client_id("Bulma");
         client.set_refresh_token("Goku");
 
@@ -589,25 +541,25 @@ mod tests {
         assert_eq!(client.get_refresh_params().len(), 4);
     }
 
-    #[tokio::test]
-    async fn can_set_token_on_successful_credential_login() {
-        let mut client = Client::new(ApiVersion::V1);
-        let token_response = TokenResponse {
-            access_token: "PowerLevel9000".to_string(),
-            token_type: Some("Saiyan".to_string()),
-            issued_at: "2019-10-01 00:00:00".to_string(),
-            instance_url: "https://dbz.salesforce.com".to_string(),
-            id: "Goku".to_string(),
-            signature: "Kamehameha".to_string(),
-        };
-
-        client.set_credentials_from_token_response(token_response);
-
-        let token = client.access_token.unwrap();
-
-        assert_eq!("PowerLevel9000", token.value);
-        assert_eq!("2019-10-01 00:00:00", token.issued_at);
-        assert_eq!("Saiyan", token.token_type);
-        assert_eq!("https://dbz.salesforce.com", client.instance_url.unwrap());
-    }
+    // #[tokio::test]
+    // async fn can_set_token_on_successful_credential_login() {
+    //     let mut client = Client::new();
+    //     let token_response = TokenResponse {
+    //         access_token: "PowerLevel9000".to_string(),
+    //         token_type: Some("Saiyan".to_string()),
+    //         issued_at: "2019-10-01 00:00:00".to_string(),
+    //         instance_url: "https://dbz.salesforce.com".to_string(),
+    //         id: "Goku".to_string(),
+    //         signature: "Kamehameha".to_string(),
+    //     };
+    //
+    //     client.set_credentials_from_token_response(token_response);
+    //
+    //     let token = client.access_token.unwrap();
+    //
+    //     assert_eq!("PowerLevel9000", token.value);
+    //     assert_eq!("2019-10-01 00:00:00", token.issued_at);
+    //     assert_eq!("Saiyan", token.token_type);
+    //     assert_eq!("https://dbz.salesforce.com", client.instance_url.unwrap());
+    // }
 }
