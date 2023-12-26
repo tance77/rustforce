@@ -24,6 +24,9 @@ impl BulkAPi {
         format!("{}/services/async/{}", instance_url, version)
     }
 
+    /**
+     * https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/asynch_api_jobs_create.htm
+     **/
     pub async fn create_job<T: Serialize>(&mut self, params: T) -> Result<Response, Error> {
         let resource_url = format!("{}/job", self.base_path());
         let headers = self.get_auth_headers();
@@ -35,6 +38,17 @@ impl BulkAPi {
         let mut headers = self.get_auth_headers();
         headers.push(("Content-Type".to_string(), "text/csv".to_string()));
         self.client.post(resource_url, csv, headers).await
+    }
+
+    /**
+     * https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/asynch_api_jobs_close.htm
+     **/
+    pub async fn close_job(&mut self, job_id: &str) -> Result<Response, Error> {
+        let resource_url = format!("{}/job/{}", self.base_path(), job_id);
+        let headers = self.get_auth_headers();
+        let mut params = HashMap::new();
+        params.insert("state", "Closed");
+        self.client.post(resource_url, params, headers).await
     }
 
     pub async fn get_batch_for_job(
