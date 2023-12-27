@@ -19,7 +19,7 @@ impl BulkApiV2 {
         let version = &self.client.version;
         format!("{}/services/data/{}", instance_url, version)
     }
-    
+
     /**
      * https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/create_job.htm
      **/
@@ -78,7 +78,6 @@ impl BulkApiV2 {
     /**
      * https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/abort_job.htm
      **/
-
     pub async fn abort_job(&mut self, job_id: &str) -> Result<Response, Error> {
         let resource_url = format!("{}/jobs/ingest/{}", self.base_path(), job_id);
         let mut params = HashMap::new();
@@ -86,16 +85,9 @@ impl BulkApiV2 {
         self.client.patch(resource_url, params).await
     }
 
-    pub async fn get_result_for_batch(
-        &mut self,
-        job_id: &str,
-        batch_id: &str,
-    ) -> Result<Response, Error> {
-        let resource_url = format!("{}/job/{}/batch/{}", self.base_path(), job_id, batch_id);
-        let headers = vec![("Content-Type".to_string(), "text/csv".to_string())];
-        self.client.get_raw(&resource_url, headers).await
-    }
-
+    /**
+     * https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/close_job.htm
+     **/
     pub async fn set_upload_state<T: Serialize>(
         &mut self,
         job_id: &str,
@@ -105,6 +97,9 @@ impl BulkApiV2 {
         self.client.patch(resource_url, params).await
     }
 
+    /**
+     * https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/get_job_info.htm
+     **/
     pub async fn check_job_status(&mut self, job_id: &str) -> Result<Response, Error> {
         let resource_url = format!("{}/jobs/ingest/{}/", self.base_path(), job_id);
         self.client.get(resource_url, vec![]).await

@@ -173,16 +173,16 @@ impl Client {
             .send()
             .await?;
 
-        if res.status().is_success() {
-            let response: TokenResponse = res.json().await?;
-            let token_type = response.token_type.unwrap_or_else(|| "".to_string());
-            self.set_access_token(response.access_token, response.issued_at, token_type);
-            self.instance_url = Some(response.instance_url);
-            Ok(self)
-        } else {
-            let token_error = res.json().await?;
-            Err(Error::TokenError(token_error))
+        if !res.status().is_success() {
+            let error_response = res.json().await?;
+            return Err(Error::TokenError(error_response));
         }
+
+        let response: TokenResponse = res.json().await?;
+        let token_type = response.token_type.unwrap_or_else(|| "".to_string());
+        self.set_access_token(response.access_token, response.issued_at, token_type);
+        self.instance_url = Some(response.instance_url);
+        Ok(self)
     }
 
     /// Login to Salesforce with username and password
@@ -206,16 +206,16 @@ impl Client {
             .send()
             .await?;
 
-        if res.status().is_success() {
-            let response: TokenResponse = res.json().await?;
-            let token_type = response.token_type.unwrap_or_else(|| "".to_string());
-            self.set_access_token(response.access_token, response.issued_at, token_type);
-            self.instance_url = Some(response.instance_url);
-            Ok(self)
-        } else {
+        if !(res.status().is_success()) {
             let error_response = res.json().await?;
-            Err(Error::TokenError(error_response))
+            return Err(Error::TokenError(error_response));
         }
+
+        let response: TokenResponse = res.json().await?;
+        let token_type = response.token_type.unwrap_or_else(|| "".to_string());
+        self.set_access_token(response.access_token, response.issued_at, token_type);
+        self.instance_url = Some(response.instance_url);
+        Ok(self)
     }
 
     pub async fn login_by_soap(
@@ -387,10 +387,12 @@ impl Client {
     }
 
     pub async fn get_raw(
-        &self,
+        &mut self,
         url: &str,
         additional_headers: Vec<(String, String)>,
     ) -> Result<Response, Error> {
+        self.refresh().await?;
+
         let mut headers = self.create_header(additional_headers)?;
         headers.remove("Accept");
         let res = self.http_client.get(url).headers(headers).send().await?;
@@ -410,6 +412,24 @@ impl Client {
             .post(url)
             .headers(self.create_header(headers)?)
             .json(&params)
+            .send()
+            .await?;
+        Ok(res)
+    }
+
+    pub async fn post_raw_buffer(
+        &mut self,
+        url: String,
+        body: Vec<u8>,
+        headers: Vec<(String, String)>,
+    ) -> Result<Response, Error> {
+        self.refresh().await?;
+
+        let res = self
+            .http_client
+            .post(url)
+            .headers(self.create_header(headers)?)
+            .body(body)
             .send()
             .await?;
         Ok(res)

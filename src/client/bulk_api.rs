@@ -33,11 +33,16 @@ impl BulkAPi {
         self.client.post(resource_url, params, headers).await
     }
 
+    /**
+     * https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/asynch_api_quickstart_add_batch.htm
+     */
     pub async fn add_batch_job(&mut self, job_id: &str, csv: Vec<u8>) -> Result<Response, Error> {
         let resource_url = format!("{}/job/{}/batch", self.base_path(), job_id);
         let mut headers = self.get_auth_headers();
         headers.push(("Content-Type".to_string(), "text/csv".to_string()));
-        self.client.post(resource_url, csv, headers).await
+        self.client
+            .post_raw_buffer(resource_url, csv, headers)
+            .await
     }
 
     /**
@@ -51,6 +56,9 @@ impl BulkAPi {
         self.client.post(resource_url, params, headers).await
     }
 
+    /**
+     * https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/asynch_api_batches_get_info_all.htm
+     **/
     pub async fn get_batch_for_job(
         &mut self,
         job_id: &str,
@@ -62,6 +70,9 @@ impl BulkAPi {
         self.client.get_raw(&resource_url, headers).await
     }
 
+    /**
+     * https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/asynch_api_batches_get_results.htm
+     */
     pub async fn get_batch_result_list(
         &mut self,
         job_id: &str,
@@ -78,6 +89,12 @@ impl BulkAPi {
         headers.push(("Content-Type".to_string(), content_type.to_string()));
         self.client.get_raw(&resource_url, headers).await
     }
+
+    /**
+     * Scroll down to "Retrieve the Results".
+     * I don't really know why this endpoint isn't documented better
+     * https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/asynch_api_code_curl_walkthrough_pk_chunking.htm
+     */
 
     pub async fn get_batch_result(
         &mut self,
@@ -97,6 +114,9 @@ impl BulkAPi {
         self.client.get_raw(&resource_url, headers).await
     }
 
+    /**
+     * https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/asynch_api_jobs_abort.htm
+     **/
     pub async fn abort_job(&mut self, job_id: &str) -> Result<Response, Error> {
         let resource_url = format!("{}/job/{}", self.base_path(), job_id);
         let mut headers = self.get_auth_headers();
