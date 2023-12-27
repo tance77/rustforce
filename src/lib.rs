@@ -10,51 +10,29 @@
 //!
 //!
 //! ```rust,no_run
-//! use rustforce::{Client, Error};
-//! use serde::Deserialize;
-//! use std::collections::HashMap;
-//! use std::env;
-//!
-//! #[derive(Deserialize, Debug)]
-//! #[serde(rename_all = "PascalCase")]
-//! struct Account {
-//!     #[serde(rename = "attributes")]
-//!     attributes: Attribute,
-//!     id: String,
-//!     name: String,
-//! }
-//!
-//! #[derive(Deserialize, Debug)]
-//! struct Attribute {
-//!     url: String,
-//!     #[serde(rename = "type")]
-//!     sobject_type: String,
-//! }
+//! use std::error::Error;
 //!
 //! #[tokio::main]
-//! async fn main() -> Result<(), Error> {
-//!     let client_id = env::var("SFDC_CLIENT_ID").unwrap();
-//!     let client_secret = env::var("SFDC_CLIENT_SECRET").unwrap();
-//!     let username = env::var("SFDC_USERNAME").unwrap();
-//!     let password = env::var("SFDC_PASSWORD").unwrap();
+//! async fn main() -> Result<(), Box<dyn Error>> {//!
 //!
-//!     let mut client = Client::new(client_id, client_secret);
-//!     client.login_with_credential(username, password).await?;
-
-//!     let mut params = HashMap::new();
-//!     params.insert("Name", "hello rust");
-
-//!     let res = client.create("Account", params).await?;
-//!     println!("{:?}", res);
-
-//!     Ok(())
+//! use rustforce::client::bulk_api::BulkAPi;
+//! use rustforce::client::client::{Client};
+//!
+//! let mut client = Client::new();
+//!
+//! client.set_client_id("your_client_id");
+//! client.set_client_secret("your_client_secret");
+//!
+//! client.login_with_credential("your_username".to_string(), "your_password".to_string()).await?;
+//!
+//!
+//!
+//! Ok(())
 //! }
 //! ```
+pub mod access_token;
 pub mod client;
 pub mod errors;
-pub mod response;
+pub mod responses;
 pub mod utils;
-
-
-pub type Client = client::Client;
-pub type Error = errors::Error;
+pub mod xml;
