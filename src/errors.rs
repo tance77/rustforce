@@ -1,5 +1,6 @@
-use crate::response::{ErrorResponse, TokenErrorResponse};
 use std::fmt;
+use crate::responses::error_response::ErrorResponse;
+use crate::responses::token_error_response::TokenErrorResponse;
 
 #[derive(Debug)]
 pub enum Error {
