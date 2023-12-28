@@ -3,6 +3,7 @@ use crate::errors::Error;
 use crate::responses::error_response::ErrorResponse;
 use crate::responses::token_response::TokenResponse;
 use crate::xml::Xml;
+use log::debug;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue, AUTHORIZATION};
 use reqwest::{Response, Url};
 use serde::Serialize;
@@ -171,7 +172,12 @@ impl Client {
             .post(token_url.as_str())
             .form(&params)
             .send()
-            .await?;
+            .await;
+
+        let res = match res {
+            Ok(res) => res,
+            Err(e) => return Err(e.into()),
+        };
 
         if !res.status().is_success() {
             let error_response = res.json().await?;
