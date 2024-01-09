@@ -44,6 +44,15 @@ impl BulkAPi {
             .post_raw_buffer(resource_url, csv, headers)
             .await
     }
+    /**
+     * https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/asynch_api_quickstart_check_status.htm
+     */
+
+    pub async fn get_batch(&mut self, job_id: &str, batch_id: &str) -> Result<Response, Error> {
+        let resource_url = format!("{}/job/{}/batch/{}/", self.base_path(), job_id, batch_id);
+        let headers = self.get_auth_headers();
+        self.client.get_raw(&resource_url, headers).await
+    }
 
     /**
      * https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/asynch_api_jobs_close.htm
@@ -57,9 +66,18 @@ impl BulkAPi {
     }
 
     /**
+     * https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/asynch_api_jobs_get_details.htm
+     **/
+    pub async fn get_job_details(&mut self, job_id: &str) -> Result<Response, Error> {
+        let resource_url = format!("{}/job/{}", self.base_path(), job_id);
+        let headers = self.get_auth_headers();
+        self.client.get_raw(&resource_url, headers).await
+    }
+
+    /**
      * https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/asynch_api_batches_get_info_all.htm
      **/
-    pub async fn get_batch_for_job(
+    pub async fn get_batches(
         &mut self,
         job_id: &str,
         content_type: &str,
@@ -73,7 +91,7 @@ impl BulkAPi {
     /**
      * https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/asynch_api_batches_get_results.htm
      */
-    pub async fn get_batch_result_list(
+    pub async fn get_result_list(
         &mut self,
         job_id: &str,
         batch_id: &str,
@@ -96,7 +114,7 @@ impl BulkAPi {
      * https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/asynch_api_code_curl_walkthrough_pk_chunking.htm
      */
 
-    pub async fn get_batch_result(
+    pub async fn get_result(
         &mut self,
         job_id: &str,
         batch_id: &str,
