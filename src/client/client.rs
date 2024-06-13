@@ -25,12 +25,10 @@ pub struct Client {
 
 impl Client {
     pub fn default() -> Self {
-        Client::new(None)
+        Client::new()
     }
-    pub fn new(user_version: Option<String>) -> Client {
+    pub fn new() -> Client {
         let http_client = reqwest::Client::new();
-        let version = user_version.unwrap_or_else(|| "v60.0".to_string());
-
         Client {
             http_client,
             client_id: None,
@@ -40,7 +38,7 @@ impl Client {
             instance_url: None,
             refresh_token: None,
             secret_required: true,
-            version,
+            version: "v60.0".to_string(),
         }
     }
     pub fn set_login_endpoint(&mut self, endpoint: &str) -> &mut Self {
