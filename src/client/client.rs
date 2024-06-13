@@ -29,7 +29,7 @@ impl Client {
     }
     pub fn new(user_version: Option<String>) -> Client {
         let http_client = reqwest::Client::new();
-        let version = user_version.unwrap_or_else(|| "v59.0".to_string());
+        let version = user_version.unwrap_or_else(|| "v60.0".to_string());
 
         Client {
             http_client,
