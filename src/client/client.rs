@@ -3,7 +3,6 @@ use crate::errors::Error;
 use crate::responses::error_response::ErrorResponse;
 use crate::responses::token_response::TokenResponse;
 use crate::xml::Xml;
-use log::debug;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue, AUTHORIZATION};
 use reqwest::{Response, Url};
 use serde::Serialize;
@@ -146,9 +145,11 @@ impl Client {
     fn get_refresh_params(&self) -> Vec<(String, String)> {
         let refresh_token = self.refresh_token.clone().unwrap_or_else(|| "".to_string());
         let client_id = self.client_id.clone().unwrap_or_else(|| "".to_string());
+        let client_secret = self.client_secret.clone().unwrap_or_else(|| "".to_string());
 
         let mut params = vec![
             ("grant_type".to_string(), "refresh_token".to_string()),
+            ("client_secret".to_string(), client_secret),
             ("refresh_token".to_string(), refresh_token),
             ("client_id".to_string(), client_id),
         ];
