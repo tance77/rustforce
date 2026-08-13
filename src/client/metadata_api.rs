@@ -188,6 +188,49 @@ impl MetadataApi {
         parse_metadata_results(&response)
     }
 
+    /// Update metadata components, synchronously.
+    ///
+    /// The update *replaces* each component, so a partial payload silently
+    /// drops whatever it omits — read the current definition first and send it
+    /// back with your changes applied.
+    pub async fn update_metadata(
+        &mut self,
+        metadata_type: &str,
+        components: &[Value],
+    ) -> Result<Vec<MetadataResult>, Error> {
+        if components.is_empty() {
+            return Ok(Vec::new());
+        }
+        let limit = max_components_for(metadata_type);
+        if components.len() > limit {
+            return Err(Error::ConfigError(format!(
+                "updateMetadata accepts at most {} {} components per call, got {}",
+                limit,
+                metadata_type,
+                components.len()
+            )));
+        }
+
+        let metadata = components
+            .iter()
+            .map(|component| {
+                format!(
+                    r#"<metadata xsi:type="{}">{}</metadata>"#,
+                    escape_xml(metadata_type),
+                    value_to_xml(component)
+                )
+            })
+            .collect::<String>();
+
+        let response = self
+            .send(
+                "updateMetadata",
+                &format!("<updateMetadata>{}</updateMetadata>", metadata),
+            )
+            .await?;
+        parse_metadata_results(&response)
+    }
+
     /// Wrap a call body in a SOAP envelope and post it to the metadata endpoint.
     async fn send(&mut self, action: &str, body: &str) -> Result<String, Error> {
         let envelope = format!(
@@ -530,6 +573,22 @@ mod tests {
         assert_eq!(max_components_for("CustomField"), 10);
         assert_eq!(max_components_for("CustomMetadata"), 200);
         assert_eq!(max_components_for("CustomApplication"), 200);
+    }
+
+    #[tokio::test]
+    async fn updating_nothing_makes_no_call() {
+        let mut api = MetadataApi::new(Client::new());
+        assert!(api.update_metadata("CustomField", &[]).await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn oversized_updates_are_rejected_before_sending() {
+        let mut api = MetadataApi::new(Client::new());
+        let components: Vec<serde_json::Value> = (0..11)
+            .map(|i| serde_json::json!({ "fullName": format!("Account.F{}__c", i) }))
+            .collect();
+        let error = api.update_metadata("CustomField", &components).await.unwrap_err();
+        assert!(format!("{}", error).contains("at most 10"), "{}", error);
     }
 
     #[tokio::test]
