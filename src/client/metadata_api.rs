@@ -455,6 +455,89 @@ mod tests {
         assert_eq!(escape_xml("it's \"quoted\""), "it&apos;s &quot;quoted&quot;");
     }
 
+    #[test]
+    fn full_name_leads_and_the_rest_is_alphabetical() {
+        // The WSDL declares an ordered sequence and Salesforce rejects elements
+        // out of order, so JSON insertion order must not leak through.
+        let xml = value_to_xml(&serde_json::json!({
+            "label": "Dev",
+            "type": "Text",
+            "fullName": "Account.Dev__c",
+            "length": 100,
+        }));
+        assert_eq!(
+            xml,
+            "<fullName>Account.Dev__c</fullName><label>Dev</label><length>100</length><type>Text</type>"
+        );
+    }
+
+    #[test]
+    fn booleans_and_numbers_render_without_quotes() {
+        let xml = value_to_xml(&serde_json::json!({ "required": false, "scale": 2 }));
+        assert_eq!(xml, "<required>false</required><scale>2</scale>");
+    }
+
+    #[test]
+    fn nested_objects_nest_their_elements() {
+        let xml = value_to_xml(&serde_json::json!({
+            "valueSet": { "restricted": true, "valueSetDefinition": { "sorted": false } }
+        }));
+        assert_eq!(
+            xml,
+            "<valueSet><restricted>true</restricted><valueSetDefinition><sorted>false</sorted></valueSetDefinition></valueSet>"
+        );
+    }
+
+    #[test]
+    fn arrays_repeat_their_element() {
+        let xml = value_to_xml(&serde_json::json!({
+            "value": [{ "fullName": "A" }, { "fullName": "B" }]
+        }));
+        assert_eq!(
+            xml,
+            "<value><fullName>A</fullName></value><value><fullName>B</fullName></value>"
+        );
+    }
+
+    #[test]
+    fn nulls_are_omitted_rather_than_sent_empty() {
+        let xml = value_to_xml(&serde_json::json!({ "description": null, "label": "Dev" }));
+        assert_eq!(xml, "<label>Dev</label>");
+    }
+
+    #[test]
+    fn text_content_is_escaped() {
+        let xml = value_to_xml(&serde_json::json!({ "label": "R&D <test>" }));
+        assert_eq!(xml, "<label>R&amp;D &lt;test&gt;</label>");
+    }
+
+    #[test]
+    fn encrypted_text_mask_settings_serialise_as_plain_elements() {
+        // The exact payload the Tooling API rejected as a complexvalue.
+        let xml = value_to_xml(&serde_json::json!({
+            "fullName": "Account.Dev_EncryptedText__c",
+            "type": "EncryptedText",
+            "maskChar": "asterisk",
+            "maskType": "all",
+            "length": 100,
+        }));
+        assert!(xml.contains("<maskChar>asterisk</maskChar>"), "{}", xml);
+        assert!(xml.contains("<maskType>all</maskType>"), "{}", xml);
+    }
+
+    #[test]
+    fn bulk_types_get_the_larger_component_limit() {
+        assert_eq!(max_components_for("CustomField"), 10);
+        assert_eq!(max_components_for("CustomMetadata"), 200);
+        assert_eq!(max_components_for("CustomApplication"), 200);
+    }
+
+    #[tokio::test]
+    async fn creating_nothing_makes_no_call() {
+        let mut api = MetadataApi::new(Client::new());
+        assert!(api.create_metadata("CustomField", &[]).await.unwrap().is_empty());
+    }
+
     #[tokio::test]
     async fn deleting_nothing_makes_no_call() {
         // No client configured — this would fail at the request if one was made.
